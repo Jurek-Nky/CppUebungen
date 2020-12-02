@@ -1,0 +1,3 @@
+/home/jurek/CLionProjects/CppUebungen/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/home/jurek/CLionProjects/CppUebungen/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/jurek/CLionProjects/CppUebungen/cmake-build-debug/CMakeFiles/CppUebungen.dir
