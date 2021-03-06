@@ -3,15 +3,20 @@
 #include <math.h>
 #include <fstream>
 #include <ctime>
-
+#include <unistd.h>
+#include <chrono>
+#include <thread>
 using namespace std;
 string help = "q\t\t: to quit the game\n"
               "w|a|s|d\t\t: move cursor\n"
               "enter + [1-9]\t: insert number at cursor position\n"
               "v\t\t: validate\n"
-              "m\t\t: mode selection\n"
+              "c\t\t: clear current number\n"
               "p\t\t: print progress to file\n"
-              "l\t\t: load sudoku from file\n";
+              "l\t\t: load sudoku from file\n"
+              "k\t\t: to let the computer solve the Sodoku\n"
+              "m\t\t: mode selection\n"
+              "\nIf mode is set to easy you can see\nthree lists of numbers below the Sudoku.\nThese are the missing numbers for the current Row, Column and Cell.\n\n";
 string error = "";
 int matrix[9][9] = {{1, 0, 0, 0, 0, 0, 0, 0, 0},
                     {0, 2, 0, 0, 0, 0, 0, 0, 0},
@@ -34,6 +39,10 @@ enum mode {
 };
 
 mode m;
+
+
+
+
 void initCurses() {
     initscr();
     cbreak();
@@ -223,10 +232,68 @@ void printFrame() {
     mvaddch(1 + (currX * 2), 1 + (currY * 4), '>');
     mvaddch(1 + (currX * 2), 3 + (currY * 4), '<');
     attroff(COLOR_PAIR(1));
-    move(23,0);
+    move(23, 0);
     addstr(error.c_str());
 }
+//##############################################################################
+// algorithm by Sharon Christine
+//##############################################################################
+bool isPresentInCol(int col, int num) {    //check whether num is present in col or not
+    for (int row = 0; row < 9; row++)
+        if (matrix[row][col] == num)
+            return true;
+    return false;
+}
 
+bool isPresentInRow(int row, int num) {    //check whether num is present in row or not
+    for (int col = 0; col < 9; col++)
+        if (matrix[row][col] == num)
+            return true;
+    return false;
+}
+
+bool isPresentInBox(int boxStartRow, int boxStartCol, int num) {    //check whether num is present in 3x3 box or not
+    for (int row = 0; row < 3; row++)
+        for (int col = 0; col < 3; col++)
+            if (matrix[row + boxStartRow][col + boxStartCol] == num)
+                return true;
+    return false;
+}
+
+
+bool findEmptyPlace(int &row, int &col) {    //get empty location and update row and column
+    for (row = 0; row < 9; row++)
+        for (col = 0; col < 9; col++)
+            if (matrix[row][col] == 0) //marked with 0 is empty
+                return true;
+    return false;
+}
+
+bool isValidPlace(int row, int col, int num) {
+    //when item not found in col, row and current 3x3 box
+    return !isPresentInRow(row, num) && !isPresentInCol(col, num) && !isPresentInBox(row - row % 3, col - col % 3, num);
+}
+
+bool solveSudoku() {
+    usleep(1000);
+    printFrame();
+    refresh();
+    int row, col;
+    if (!findEmptyPlace(row, col))
+        return true;     //when all places are filled
+    for (int num = 1; num <= 9; num++) {
+        if (isValidPlace(row, col, num)) {    //check validation, if yes, put the number in the matrix
+            matrix[row][col] = num;
+            if (solveSudoku())     //recursively go for other rooms in the matrix
+                return true;
+            matrix[row][col] = 0;    //turn to unassigned space when conditions are not satisfied
+        }
+    }
+    return false;
+}
+
+
+//##############################################################################
 void runLoop() {
     char c;
     while (true) {
@@ -234,7 +301,7 @@ void runLoop() {
         printFrame();
         refresh();
         switch (c = getch()) {
-            case 'q':
+            case 'q': {
                 while (true) {
                     error = "You sure bro? All progress will be lost!!\ny : yes";
                     printFrame();
@@ -245,55 +312,55 @@ void runLoop() {
                     }
                 }
                 break;
-
-            case 'a':
+            }
+            case 'a': {
                 if (currY > 0) {
                     currY = currY - 1;
                 }
                 error = "";
                 break;
-
-            case 'w':
+            }
+            case 'w': {
                 if (currX > 0) {
                     currX = currX - 1;
                 }
                 error = "";
                 break;
-
-            case 's':
+            }
+            case 's': {
                 if (currX < 8) {
                     currX = currX + 1;
                 }
                 error = "";
                 break;
-
-            case 'd':
+            }
+            case 'd': {
                 if (currY < 8) {
                     currY = currY + 1;
                 }
                 error = "";
                 break;
-
-            case '\n':
+            }
+            case '\n': {
                 if ((c = getch()) > 48 && c < 58) {
                     matrix[currX][currY] = c - 48;
                     fillCellArr();
                 }
                 error = "";
                 break;
-
-            case 'h':
-                while (true) {
-                    clear();
-                    addstr(help.c_str());
-                    refresh();
-                    if (getch()) {
-                        break;
-                    }
+            }
+            case 'h': {
+                clear();
+                addstr(help.c_str());
+                refresh();
+                if (getch()) {
+                    break;
                 }
+
                 error = "";
                 break;
-            case 'm':
+            }
+            case 'm': {
                 if (m == Easy) {
                     m = Medium;
                 } else if (m == Medium) {
@@ -301,58 +368,86 @@ void runLoop() {
                 } else { m = Easy; }
                 error = "";
                 break;
-            case 'c':
+            }
+            case 'c': {
                 matrix[currX][currY] = 0;
                 fillCellArr();
                 error = "";
                 break;
-            case 'l':
-                while (true) {
-                    char str[80];
-                    string Filestring;
-                    clear();
-                    mvaddstr(9, 0, "input the location of the sudoku file\n");
-                    addstr(":$");
-                    refresh();
-                    nocbreak();
-                    echo();
-                    getstr(str);
-                    fstream infile;
-                    infile.open(str, ios::in);
-                    if (!infile) {
-                        error = "file not found";
-                    } else {
-                        while (true) {
-                            infile >> Filestring;
-                            if (infile.eof()) {
+            }
+            case 'k': {
+                if (solveSudoku()) {
+                    error = "finished";
+                } else
+                    error = "No solution exists";
+                break;
+            }
+            case 'l': {
+                bool corrFormat = true;
+                int tmp_matrix[9][9] = {{0, 0, 0, 0, 0, 0, 0, 0, 0},
+                                        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+                                        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+                                        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+                                        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+                                        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+                                        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+                                        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+                                        {0, 0, 0, 0, 0, 0, 0, 0, 0},};
+                char str[80];
+                clear();
+                error = "input the location of the sudoku file";
+                printFrame();
+                nocbreak();
+                echo();
+                move(24, 0);
+                //mvprintw(10,0,get_current_dir_name());
+                getstr(str);
+                string line;
+                ifstream file(str, ios::in);
+                if (file.is_open()) {
+                    int count = 0;
+                    while (getline(file, line)) {
+                        for (int i = 0; i < 9; ++i) {
+                            if (isdigit(line[i])) {
+                                tmp_matrix[count][i] = line[i] - 48;
+
+                            } else {
+                                error = "wrong format";
+                                corrFormat = false;
                                 break;
                             }
                         }
+                        count = count + 1;
                     }
-                    error = Filestring;
+                    file.close();
+                    if (corrFormat) {
+                        for (int i = 0; i < 9; ++i) {
+                            for (int j = 0; j < 9; ++j) {
+                                matrix[i][j] = tmp_matrix[i][j];
+                            }
+                        }
+                        error = "Sudoku loaded successfully";
+                    }
 
-                    noecho();
-                    cbreak();
-                    break;
-
-                }
-
+                } else { error = "file not found."; }
+                noecho();
+                cbreak();
                 break;
-
+            }
             case 'p':
                 string filename = "sudoku";
                 fstream outfile;
                 outfile.open(filename, ios::out);
                 if (!outfile) {
-                    error=  "File not created!";
+                    error = "File not created!";
                 } else {
                     error = "File created successfully!";
                     for (int i = 0; i < 9; ++i) {
                         for (int j = 0; j < 9; ++j) {
                             if (matrix[i][j] != 0) {
-                                outfile << matrix[i][j] << ",";
+                                outfile << matrix[i][j];
                             } else {
-                                outfile << ",";
+                                outfile << "0";
                             }
                         }
                         outfile << "\n";
